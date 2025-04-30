@@ -1,24 +1,16 @@
 import os
 from typing import List, Dict, Tuple
 import warnings
-import langdetect  # For language detection
-
-# Import necessary langchain components
+import langdetect  
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import GoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 
-# Suppress warnings related to embeddings
 warnings.filterwarnings("ignore")
 
-# Set your API key for Google Gemini
-os.environ["GOOGLE_API_KEY"] = "AIzaSyCw5KsAG7HB-oCCPqrn9kmmmPPKzJ96rWw"  # Replace with your actual API key
-os.environ["LANGCHAIN_API_KEY"] = "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"
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-
-# Define paths to vector stores
+os.environ["GOOGLE_API_KEY"] = "Key"  
 VECTOR_STORE_BASE_PATH = "./VectorStore"
 VECTOR_STORES = {
     "Copyright": os.path.join(VECTOR_STORE_BASE_PATH, "CV/"),
@@ -30,28 +22,19 @@ VECTOR_STORES = {
 
 
 def detect_language(text: str) -> str:
-    """
-    Detect the language of the input text.
-    Returns the language code (e.g., 'en', 'es', 'fr', etc.)
-    """
     try:
         return langdetect.detect(text)
     except:
-        # Default to English if detection fails
         return "en"
 
 
 def translate_text(text: str, target_language: str) -> str:
-    """
-    Translate text to the specified target language using Gemini LLM.
-    """
     translator_llm = GoogleGenerativeAI(
         model="gemini-2.0-flash",
         google_api_key=os.environ["GOOGLE_API_KEY"],
         temperature=0.1
     )
 
-    # If target is English
     if target_language == "en":
         translation_prompt = f"""
         Translate the following text to English. Preserve the meaning and technical terms.
@@ -60,7 +43,6 @@ def translate_text(text: str, target_language: str) -> str:
 
         Translation:
         """
-    # If target is not English
     else:
         translation_prompt = f"""
         Translate the following text to {target_language}. Preserve the meaning and technical terms.
@@ -75,9 +57,6 @@ def translate_text(text: str, target_language: str) -> str:
 
 
 def classify_ip_domain(query: str) -> str:
-    """
-    Classify the query into one of the IP domains using LLM.
-    """
     classifier_llm = GoogleGenerativeAI(
         model="gemini-2.0-flash",
         google_api_key=os.environ["GOOGLE_API_KEY"],
@@ -116,9 +95,6 @@ def classify_ip_domain(query: str) -> str:
 
 
 def load_vector_store(domain: str):
-    """
-    Load the FAISS vector store for the specified domain.
-    """
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/LaBSE")
     vector_store_path = VECTOR_STORES.get(domain)
 
@@ -142,9 +118,6 @@ def load_vector_store(domain: str):
 
 
 def setup_rag_chain(vector_store):
-    """
-    Set up the RAG chain with Gemini LLM.
-    """
     llm = GoogleGenerativeAI(
         model="gemini-2.0-flash",
         google_api_key=os.environ["GOOGLE_API_KEY"],
@@ -177,7 +150,7 @@ def setup_rag_chain(vector_store):
         chain_type="stuff",
         retriever=vector_store.as_retriever(search_kwargs={"k": 5}),
         chain_type_kwargs={"prompt": prompt},
-        return_source_documents=True  # Modified to return source documents
+        return_source_documents=True 
     )
 
     return qa_chain
@@ -185,36 +158,30 @@ def setup_rag_chain(vector_store):
 
 def answer_query(query: str) -> Dict:
     try:
-        # Detect the language of the query
         source_language = detect_language(query)
         print(f"Detected language: {source_language}")
 
-        # Translate query to English if not already in English
         if source_language != "en":
             english_query = translate_text(query, "en")
             print(f"Translated query: {english_query}")
         else:
             english_query = query
 
-        # Process the query in English
         domain = classify_ip_domain(english_query)
         print(f"Classified query as {domain} domain")
 
         vector_store = load_vector_store(domain)
         qa_chain = setup_rag_chain(vector_store)
 
-        # Use the correct input key
         response = qa_chain.invoke({"query": english_query})
         english_answer = response["result"]
         source_documents = response.get("source_documents", [])
 
-        # Extract source references
         sources = []
         for doc in source_documents:
             if hasattr(doc, 'metadata') and 'source' in doc.metadata:
                 sources.append(doc.metadata['source'])
 
-        # Translate the answer back to the original language if needed
         if source_language != "en":
             translated_answer = translate_text(english_answer, source_language)
             result = translated_answer
@@ -226,7 +193,6 @@ def answer_query(query: str) -> Dict:
     except Exception as e:
         error_message = f"An error occurred while processing your query: {str(e)}"
 
-        # Translate error message if not in English
         if 'source_language' in locals() and source_language != "en":
             translated_error = translate_text(error_message, source_language)
             return {"result": translated_error, "domain": "Error", "sources": []}
