@@ -1,6 +1,7 @@
 import os
 from typing import List, Dict, Tuple
 import warnings
+from dotenv import load_dotenv
 import langdetect  
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_google_genai import GoogleGenerativeAI
@@ -8,9 +9,11 @@ from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 
+load_dotenv()
 warnings.filterwarnings("ignore")
 
-os.environ["GOOGLE_API_KEY"] = "Key"  
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")  
+
 VECTOR_STORE_BASE_PATH = "./VectorStore"
 VECTOR_STORES = {
     "Copyright": os.path.join(VECTOR_STORE_BASE_PATH, "CV/"),
@@ -34,7 +37,6 @@ def translate_text(text: str, target_language: str) -> str:
         google_api_key=os.environ["GOOGLE_API_KEY"],
         temperature=0.1
     )
-
     if target_language == "en":
         translation_prompt = f"""
         Translate the following text to English. Preserve the meaning and technical terms.
@@ -150,7 +152,7 @@ def setup_rag_chain(vector_store):
         chain_type="stuff",
         retriever=vector_store.as_retriever(search_kwargs={"k": 5}),
         chain_type_kwargs={"prompt": prompt},
-        return_source_documents=True 
+        return_source_documents=True  
     )
 
     return qa_chain
@@ -192,7 +194,6 @@ def answer_query(query: str) -> Dict:
 
     except Exception as e:
         error_message = f"An error occurred while processing your query: {str(e)}"
-
         if 'source_language' in locals() and source_language != "en":
             translated_error = translate_text(error_message, source_language)
             return {"result": translated_error, "domain": "Error", "sources": []}
